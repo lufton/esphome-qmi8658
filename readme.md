@@ -125,7 +125,7 @@ sensor:
 
 ## `qmi8658.enable_wake_on_motion` Action
 
-You can put qmi8658 chip into special low-power consumption `Wake on Motion` (WoM) mode. When module will detect motion exceeding the specified threshold it will toggle one of it's interrupt pins. That can be helpful when building low power consumption systems with {{< docref "/components/deep_sleep" >}}. Here is an example:
+You can put qmi8658 chip into special low-power consumption `Wake on Motion` (WoM) mode. When module will detect motion exceeding the specified threshold it will toggle one of its interrupt pins. That can be helpful when building low power consumption systems with [deep_sleep](https://esphome.io/components/deep_sleep/). Here is an example:
 
 ```yaml
 # Example configuration entry
@@ -159,12 +159,9 @@ on_...:
   - deep_sleep.enter:
 ```
 
-{{< note >}}
 In this example in `deep_sleep` component we set `GPIO13` as wakeup pin, it is wired to `INT2` pin of QMI8658. On some trigger we enable WoM that will set `INT2` pin to `LOW` and toggle it to `HIGH` on motion exceeding `250` threshold waking up the host.
 
 After host wake up we need to disable WoM to be able to consume new data from a sensor so we use template sensor that utilizes `esp_sleep_get_wakeup_cause()` method.
-
-{{< /note >}}
 
 Configuration options:
 

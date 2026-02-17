@@ -16,7 +16,7 @@ template<typename... Ts> class EnableWakeOnMotionAction : public Action<Ts...>, 
   TEMPLATABLE_VALUE(QMI8658InterruptPin, interrupt_pin)
   TEMPLATABLE_VALUE(uint8_t, threshold)
 
-  void play(Ts... x) override {
+  void play(const Ts &...x) override {
     QMI8658AccelODR accel_odr = this->accel_odr_.value(x...);
     uint8_t blanking_time = this->blanking_time_.value(x...);
     uint8_t initial_pin_state = this->initial_pin_state_.value(x...);
@@ -28,7 +28,7 @@ template<typename... Ts> class EnableWakeOnMotionAction : public Action<Ts...>, 
 
 template<typename... Ts> class DisableWakeOnMotionAction : public Action<Ts...>, public Parented<QMI8658Component> {
  public:
-  void play(Ts... x) override { this->parent_->disable_wake_on_motion(); }
+  void play(const Ts &...x) override { this->parent_->disable_wake_on_motion(); }
 };
 
 }  // namespace qmi8658

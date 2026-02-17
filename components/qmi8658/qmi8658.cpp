@@ -60,10 +60,33 @@ void QMI8658Component::setup() {
     this->mark_failed();
     return;
   }
+
+  if (this->interrupt_pin_1_ != nullptr) {
+    ESP_LOGCONFIG(TAG, "Setting up interrupt pin...");
+    this->interrupt_pin_1_->setup();
+    this->store_.pin = this->interrupt_pin_1_->to_isr();
+    this->interrupt_pin_1_->attach_interrupt(QMI8658SensorStore::gpio_intr, &this->store_, gpio::INTERRUPT_RISING_EDGE);
+    this->enable_interrupt_(QMI8658_INT1);
+    this->enable_data_ready_interrupt_();
+  }
+  if (this->interrupt_pin_2_ != nullptr) {
+    ESP_LOGCONFIG(TAG, "Setting up interrupt pin...");
+    this->interrupt_pin_2_->setup();
+    this->store_.pin = this->interrupt_pin_2_->to_isr();
+    this->interrupt_pin_2_->attach_interrupt(QMI8658SensorStore::gpio_intr, &this->store_, gpio::INTERRUPT_RISING_EDGE);
+    this->enable_interrupt_(QMI8658_INT2);
+    this->enable_data_ready_interrupt_();
+  }
 }
 
 void QMI8658Component::dump_config() {
   ESP_LOGCONFIG(TAG, "QMI8658:");
+  if (this->interrupt_pin_1_ != nullptr) {
+    LOG_PIN("  Interrupt pin 1: ", this->interrupt_pin_1_);
+  }
+  if (this->interrupt_pin_2_ != nullptr) {
+    LOG_PIN("  Interrupt pin 2: ", this->interrupt_pin_2_);
+  }
   ESP_LOGCONFIG(TAG, "    Acceleration ODR: %u", this->accel_odr_);
   ESP_LOGCONFIG(TAG, "    Acceleration range: %u", this->accel_range_);
   LOG_I2C_DEVICE(this);
@@ -80,7 +103,16 @@ void QMI8658Component::dump_config() {
   LOG_SENSOR("  ", "Temperature", this->temperature_sensor_);
 }
 
+void QMI8658Component::loop() {
+  if (this->interrupt_pin_1_ == nullptr && this->interrupt_pin_2_ == nullptr) return;
+  if (this->store_.data_ready) {
+    this->update();
+    this->store_.data_ready = false;
+  }
+}
+
 void QMI8658Component::update() {
+  if (this->interrupt_pin_1_ != nullptr || this->interrupt_pin_2_ != nullptr && !this->store_.data_ready) return;
   ESP_LOGV(TAG, "    Updating QMI8658...");
   int16_t data[3];
 
@@ -200,6 +232,22 @@ bool QMI8658Component::disable_wake_on_motion() {
   return this->enable_required_sensors_();
 }
 
+void QMI8658Component::enable_data_ready_interrupt_() {
+  this->clr_register_bit_(QMI8658_REGISTER_CTRL7, 5);
+}
+
+void QMI8658Component::enable_interrupt_(QMI8658InterruptPin interrupt_pin) {
+  ESP_LOGV(TAG, "  Enabling interrupt...");
+  switch (interrupt_pin) {
+    case QMI8658_INT1:
+      this->set_register_bit_(QMI8658_REGISTER_CTRL1, 3);
+      break;
+    case QMI8658_INT2:
+      this->set_register_bit_(QMI8658_REGISTER_CTRL1, 4);
+      break;
+    }
+}
+
 bool QMI8658Component::enable_required_sensors_() {
   ESP_LOGV(TAG, "  Enabling sensors...");
   uint8_t sensors_state = QMI8658_SENSOR_NONE;
@@ -317,6 +365,10 @@ bool QMI8658Component::set_register_bit_(uint8_t reg, uint8_t bit) {
     return false;
   }
   return true;
+}
+
+void IRAM_ATTR QMI8658SensorStore::gpio_intr(QMI8658SensorStore *arg) {
+  arg->data_ready = true;
 }
 
 }  // namespace qmi8658

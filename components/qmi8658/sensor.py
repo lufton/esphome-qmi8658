@@ -1,4 +1,4 @@
-from esphome import automation
+from esphome import automation, pins
 import esphome.codegen as cg
 from esphome.components import i2c, sensor
 import esphome.config_validation as cv
@@ -36,6 +36,9 @@ CONF_GYROSCOPE_LPF_MODE = "gyroscope_lpf_mode"
 CONF_GYROSCOPE_ODR = "gyroscope_odr"
 CONF_GYROSCOPE_RANGE = "gyroscope_range"
 CONF_INITIAL_PIN_STATE = "initial_pin_state"
+CONF_INTERRUPT_PIN_1 = f"{CONF_INTERRUPT_PIN}_1"
+CONF_INTERRUPT_PIN_2 = f"{CONF_INTERRUPT_PIN}_2"
+CONF_INTERRUPT_PIN_GROUP = "interrupt_pin_group"
 
 qmi8658_ns = cg.esphome_ns.namespace("qmi8658")
 QMI8658Component = qmi8658_ns.class_(
@@ -133,6 +136,8 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(QMI8658Component),
+            cv.Exclusive(CONF_INTERRUPT_PIN_1, CONF_INTERRUPT_PIN_GROUP): pins.gpio_input_pin_schema,
+            cv.Exclusive(CONF_INTERRUPT_PIN_2, CONF_INTERRUPT_PIN_GROUP): pins.gpio_input_pin_schema,
             cv.Optional(CONF_ACCELERATION_LPF_MODE, "OFF"): cv.enum(
                 QMI8658_LPF_MODE, upper=True
             ),
@@ -249,6 +254,13 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
+
+    if CONF_INTERRUPT_PIN_1 in config:
+        interrupt_pin = await cg.gpio_pin_expression(config[CONF_INTERRUPT_PIN_1])
+        cg.add(var.set_interrupt_pin_1(interrupt_pin))
+    if CONF_INTERRUPT_PIN_2 in config:
+        interrupt_pin = await cg.gpio_pin_expression(config[CONF_INTERRUPT_PIN_2])
+        cg.add(var.set_interrupt_pin_2(interrupt_pin))
 
     cg.add(var.set_accel_lpf_mode(config[CONF_ACCELERATION_LPF_MODE]))
     cg.add(var.set_accel_odr(config[CONF_ACCELERATION_ODR]))

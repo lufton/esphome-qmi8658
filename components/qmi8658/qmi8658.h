@@ -1,8 +1,9 @@
 #pragma once
 
-#include "esphome/core/component.h"
-#include "esphome/components/sensor/sensor.h"
 #include "esphome/components/i2c/i2c.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/core/component.h"
+#include "esphome/core/hal.h"
 
 namespace esphome {
 namespace qmi8658 {
@@ -67,9 +68,12 @@ const uint8_t QMI8658_SPI_AI = 1 << 6;  // Address auto increment
   type name##_{def}; \
 \
  public: \
-  void set_##name(const type &value) { name##_ = value; }
+  void set_##name(type value) { name##_ = value; }
 
-enum QMI8658InterruptPin { QMI8658_INT1 = 0x00, QMI8658_INT2 = 0x01 };
+enum QMI8658InterruptPin {
+  QMI8658_INT1 = 0x00,
+  QMI8658_INT2 = 0x01
+};
 
 enum QMI8658LPFMode {
   QMI8658_LPF_MODE_0 = 0x00,
@@ -125,8 +129,17 @@ enum QMI8658GyroODR {
   QMI8658_GYRO_ODR_31_25HZ = 0x08
 };
 
+struct QMI8658SensorStore {
+  volatile bool data_ready{true};
+  ISRInternalGPIOPin pin;
+
+  static void gpio_intr(QMI8658SensorStore *arg);
+};
+
 class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
  public:
+  FIELD_WITH_SETTER(InternalGPIOPin*, interrupt_pin_1, nullptr)
+  FIELD_WITH_SETTER(InternalGPIOPin*, interrupt_pin_2, nullptr)
   FIELD_WITH_SETTER(QMI8658LPFMode, accel_lpf_mode, QMI8658_LPF_OFF)
   FIELD_WITH_SETTER(QMI8658AccelODR, accel_odr, QMI8658_ACCEL_ODR_8000HZ)
   FIELD_WITH_SETTER(QMI8658AccelRange, accel_range, QMI8658_ACCEL_RANGE_2G)
@@ -141,10 +154,11 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   SUB_SENSOR(gyro_z)
   SUB_SENSOR(temperature)
 
+  float get_setup_priority() const override { return setup_priority::DATA; }
   void setup() override;
   void dump_config() override;
+  void loop() override;
   void update() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
 
   bool disable_wake_on_motion();
   bool enable_wake_on_motion(uint8_t threshold, QMI8658AccelODR accel_odr, QMI8658InterruptPin interrupt_pin,
@@ -155,6 +169,8 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   bool configure_accel_(QMI8658AccelRange accel_range, QMI8658AccelODR accel_odr, QMI8658LPFMode accel_lpf_mode);
   bool configure_gyro_(QMI8658GyroRange gyro_range, QMI8658GyroODR gyro_odr, QMI8658LPFMode gyro_lpf_mode);
   bool disable_sensors_();
+  void enable_data_ready_interrupt_();
+  void enable_interrupt_(QMI8658InterruptPin interrupt_pin);
   bool enable_required_sensors_();
   bool enable_sensors_(uint8_t sensors_state);
   bool is_accel_required_() {
@@ -166,6 +182,7 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   i2c::ErrorCode read_le_int16_(uint8_t reg, int16_t *value, uint8_t len);
   bool send_command_(uint8_t command, uint32_t wait_ms = 1000);
   bool set_register_bit_(uint8_t reg, uint8_t);
+  QMI8658SensorStore store_{};
 };
 
 }  // namespace qmi8658
