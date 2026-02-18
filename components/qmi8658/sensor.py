@@ -42,7 +42,7 @@ CONF_INTERRUPT_PIN_GROUP = "interrupt_pin_group"
 
 qmi8658_ns = cg.esphome_ns.namespace("qmi8658")
 QMI8658Component = qmi8658_ns.class_(
-    "QMI8658Component", cg.PollingComponent, i2c.I2CDevice
+    "QMI8658Component", cg.PollingComponent, i2c.I2CDevice,
 )
 
 QMI8658InterruptPin = qmi8658_ns.enum("QMI8658InterruptPin")
@@ -115,10 +115,10 @@ QMI8658_GYRO_RANGE = {
 }
 
 EnableWakeOnMotionAction = qmi8658_ns.class_(
-    "EnableWakeOnMotionAction", automation.Action
+    "EnableWakeOnMotionAction", automation.Action,
 )
 DisableWakeOnMotionAction = qmi8658_ns.class_(
-    "DisableWakeOnMotionAction", automation.Action
+    "DisableWakeOnMotionAction", automation.Action,
 )
 
 ACCEL_SCHEMA = {
@@ -136,43 +136,43 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(QMI8658Component),
-            cv.Exclusive(CONF_INTERRUPT_PIN_1, CONF_INTERRUPT_PIN_GROUP): pins.gpio_input_pin_schema,
-            cv.Exclusive(CONF_INTERRUPT_PIN_2, CONF_INTERRUPT_PIN_GROUP): pins.gpio_input_pin_schema,
+            cv.Exclusive(CONF_INTERRUPT_PIN_1, CONF_INTERRUPT_PIN_GROUP): pins.internal_gpio_input_pin_schema,
+            cv.Exclusive(CONF_INTERRUPT_PIN_2, CONF_INTERRUPT_PIN_GROUP): pins.internal_gpio_input_pin_schema,
             cv.Optional(CONF_ACCELERATION_LPF_MODE, "OFF"): cv.enum(
-                QMI8658_LPF_MODE, upper=True
+                QMI8658_LPF_MODE, upper=True,
             ),
             cv.Optional(CONF_ACCELERATION_ODR, default="8000HZ"): cv.enum(
-                QMI8658_ACCEL_ODR, upper=True
+                QMI8658_ACCEL_ODR, upper=True,
             ),
             cv.Optional(CONF_ACCELERATION_RANGE, default="2G"): cv.enum(
-                QMI8658_ACCEL_RANGE, upper=True
+                QMI8658_ACCEL_RANGE, upper=True,
             ),
             cv.Optional(CONF_ACCELERATION_X): sensor.sensor_schema(
-                icon=ICON_ACCELERATION_X, **ACCEL_SCHEMA
+                icon=ICON_ACCELERATION_X, **ACCEL_SCHEMA,
             ),
             cv.Optional(CONF_ACCELERATION_Y): sensor.sensor_schema(
-                icon=ICON_ACCELERATION_Y, **ACCEL_SCHEMA
+                icon=ICON_ACCELERATION_Y, **ACCEL_SCHEMA,
             ),
             cv.Optional(CONF_ACCELERATION_Z): sensor.sensor_schema(
-                icon=ICON_ACCELERATION_Z, **ACCEL_SCHEMA
+                icon=ICON_ACCELERATION_Z, **ACCEL_SCHEMA,
             ),
             cv.Optional(CONF_GYROSCOPE_LPF_MODE, "OFF"): cv.enum(
-                QMI8658_LPF_MODE, upper=True
+                QMI8658_LPF_MODE, upper=True,
             ),
             cv.Optional(CONF_GYROSCOPE_ODR, default="8000HZ"): cv.enum(
-                QMI8658_GYRO_ODR, upper=True
+                QMI8658_GYRO_ODR, upper=True,
             ),
             cv.Optional(CONF_GYROSCOPE_RANGE, default="16DPS"): cv.enum(
-                QMI8658_GYRO_RANGE, upper=True
+                QMI8658_GYRO_RANGE, upper=True,
             ),
             cv.Optional(CONF_GYROSCOPE_X): sensor.sensor_schema(
-                icon=ICON_GYROSCOPE_X, **GYRO_SCHEMA
+                icon=ICON_GYROSCOPE_X, **GYRO_SCHEMA,
             ),
             cv.Optional(CONF_GYROSCOPE_Y): sensor.sensor_schema(
-                icon=ICON_GYROSCOPE_Y, **GYRO_SCHEMA
+                icon=ICON_GYROSCOPE_Y, **GYRO_SCHEMA,
             ),
             cv.Optional(CONF_GYROSCOPE_Z): sensor.sensor_schema(
-                icon=ICON_GYROSCOPE_Z, **GYRO_SCHEMA
+                icon=ICON_GYROSCOPE_Z, **GYRO_SCHEMA,
             ),
             cv.Optional(CONF_TEMPERATURE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CELSIUS,
@@ -180,25 +180,24 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-        }
+        },
     )
     .extend(cv.polling_component_schema("60s"))
     .extend(i2c.i2c_device_schema(0x6B))
 )
 
-
 ENABLE_WAKE_ON_MOTION_ACTION_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.use_id(QMI8658Component),
         cv.Optional(CONF_ACCELERATION_ODR, default="LOWPOWER_21HZ"): cv.templatable(
-            cv.enum(QMI8658_ACCEL_ODR, upper=True)
+            cv.enum(QMI8658_ACCEL_ODR, upper=True),
         ),
         cv.Optional(CONF_BLANKING_TIME, default=0): cv.templatable(
-            cv.int_range(min=0, max=63)
+            cv.int_range(min=0, max=63),
         ),
         cv.Required(CONF_INITIAL_PIN_STATE): cv.templatable(cv.int_range(min=0, max=1)),
         cv.Required(CONF_INTERRUPT_PIN): cv.templatable(
-            cv.enum(QMI8658_INTERRUPT_PIN, upper=True)
+            cv.enum(QMI8658_INTERRUPT_PIN, upper=True),
         ),
         cv.Required(CONF_THRESHOLD): cv.templatable(cv.int_range(min=1, max=255)),
     },
@@ -221,12 +220,12 @@ async def qmi8658_enable_wake_on_motion_to_code(config, action_id, template_arg,
     await cg.register_parented(var, config[CONF_ID])
 
     accel_odr = await cg.templatable(
-        config[CONF_ACCELERATION_ODR], args, QMI8658AccelODR
+        config[CONF_ACCELERATION_ODR], args, QMI8658AccelODR,
     )
     blanking_time = await cg.templatable(config[CONF_BLANKING_TIME], args, int)
     initial_pin_state = await cg.templatable(config[CONF_INITIAL_PIN_STATE], args, int)
     interrupt_pin = await cg.templatable(
-        config[CONF_INTERRUPT_PIN], args, QMI8658InterruptPin
+        config[CONF_INTERRUPT_PIN], args, QMI8658InterruptPin,
     )
     threshold = await cg.templatable(config[CONF_THRESHOLD], args, int)
     cg.add(var.set_accel_odr(accel_odr))
@@ -255,12 +254,18 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
+    def set_interrupt_pin_config(pin_config: dict) -> dict:
+        pin_config.update({"inverted": False, "mode": {"input": True, "output": False, "pullup": False}})
+        return pin_config
+
     if CONF_INTERRUPT_PIN_1 in config:
-        interrupt_pin = await cg.gpio_pin_expression(config[CONF_INTERRUPT_PIN_1])
-        cg.add(var.set_interrupt_pin_1(interrupt_pin))
+        interrupt_pin_1_config = set_interrupt_pin_config(config[CONF_INTERRUPT_PIN_1])
+        interrupt_pin_1 = await cg.gpio_pin_expression(interrupt_pin_1_config)
+        cg.add(var.set_interrupt_pin_1(interrupt_pin_1))
     if CONF_INTERRUPT_PIN_2 in config:
-        interrupt_pin = await cg.gpio_pin_expression(config[CONF_INTERRUPT_PIN_2])
-        cg.add(var.set_interrupt_pin_2(interrupt_pin))
+        interrupt_pin_2_config = set_interrupt_pin_config(config[CONF_INTERRUPT_PIN_2])
+        interrupt_pin_2 = await cg.gpio_pin_expression(interrupt_pin_2_config)
+        cg.add(var.set_interrupt_pin_2(interrupt_pin_2))
 
     cg.add(var.set_accel_lpf_mode(config[CONF_ACCELERATION_LPF_MODE]))
     cg.add(var.set_accel_odr(config[CONF_ACCELERATION_ODR]))
