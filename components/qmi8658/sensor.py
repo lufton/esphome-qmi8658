@@ -32,6 +32,9 @@ CONF_ACCELERATION_LPF_MODE = "acceleration_lpf_mode"
 CONF_ACCELERATION_ODR = "acceleration_odr"
 CONF_ACCELERATION_RANGE = "acceleration_range"
 CONF_BLANKING_TIME = "blanking_time"
+CONF_FIFO_MODE = "fifo_mode"
+CONF_FIFO_SIZE = "fifo_size"
+CONF_FIFO_WATERMARK = "fifo_watermark"
 CONF_GYROSCOPE_LPF_MODE = "gyroscope_lpf_mode"
 CONF_GYROSCOPE_ODR = "gyroscope_odr"
 CONF_GYROSCOPE_RANGE = "gyroscope_range"
@@ -114,6 +117,22 @@ QMI8658_GYRO_RANGE = {
     "2048DPS": QMI8658GyroRange.QMI8658_GYRO_RANGE_2048DPS,
 }
 
+QMI8658FifoMode = qmi8658_ns.enum("QMI8658FifoMode")
+QMI8658_FIFO_MODE = {
+    "BYPASS": QMI8658FifoMode.QMI8658_FIFO_MODE_BYPASS,
+    "FIFO": QMI8658FifoMode.QMI8658_FIFO_MODE_FIFO,
+    "STREAM": QMI8658FifoMode.QMI8658_FIFO_MODE_STREAM,
+    "MAX": QMI8658FifoMode.QMI8658_FIFO_MODE_MAX,
+}
+
+QMI8658FifoSize = qmi8658_ns.enum("QMI8658FifoSize")
+QMI8658_FIFO_SIZE = {
+    16: QMI8658FifoSize.QMI8658_FIFO_SIZE_16,
+    32: QMI8658FifoSize.QMI8658_FIFO_SIZE_32,
+    64: QMI8658FifoSize.QMI8658_FIFO_SIZE_64,
+    128: QMI8658FifoSize.QMI8658_FIFO_SIZE_128,
+}
+
 EnableWakeOnMotionAction = qmi8658_ns.class_(
     "EnableWakeOnMotionAction", automation.Action,
 )
@@ -165,6 +184,13 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_GYROSCOPE_RANGE, default="16DPS"): cv.enum(
                 QMI8658_GYRO_RANGE, upper=True,
             ),
+            cv.Optional(CONF_FIFO_MODE, default="BYPASS"): cv.enum(
+                QMI8658_FIFO_MODE, upper=True,
+            ),
+            cv.Optional(CONF_FIFO_SIZE, default=16): cv.enum(
+                QMI8658_FIFO_SIZE,
+            ),
+            cv.Optional(CONF_FIFO_WATERMARK, default=8): cv.positive_not_null_int,
             cv.Optional(CONF_GYROSCOPE_X): sensor.sensor_schema(
                 icon=ICON_GYROSCOPE_X, **GYRO_SCHEMA,
             ),
@@ -182,7 +208,7 @@ CONFIG_SCHEMA = (
             ),
         },
     )
-    .extend(cv.polling_component_schema("60s"))
+    .extend(cv.polling_component_schema("50ms"))
     .extend(i2c.i2c_device_schema(0x6B))
 )
 
@@ -273,6 +299,9 @@ async def to_code(config):
     cg.add(var.set_gyro_lpf_mode(config[CONF_GYROSCOPE_LPF_MODE]))
     cg.add(var.set_gyro_odr(config[CONF_GYROSCOPE_ODR]))
     cg.add(var.set_gyro_range(config[CONF_GYROSCOPE_RANGE]))
+    cg.add(var.set_fifo_mode(QMI8658_FIFO_MODE[config[CONF_FIFO_MODE]]))
+    cg.add(var.set_fifo_size(QMI8658_FIFO_SIZE[config[CONF_FIFO_SIZE]]))
+    cg.add(var.set_fifo_watermark(config[CONF_FIFO_WATERMARK]))
 
     for d in ["x", "y", "z"]:
         accel_key = f"acceleration_{d}"

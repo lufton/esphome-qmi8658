@@ -119,7 +119,7 @@ sensor:
 - **temperature** (*Optional*): Use the internal temperature of the sensor. All options from
   [Sensor](https://esphome.io/components/sensor).
 
-- **update_interval** (*Optional*, [Time](https://esphome.io/guides/configuration-types#time)): The interval to check the sensor. Defaults to `60s`.
+- **update_interval** (*Optional*, [Time](https://esphome.io/guides/configuration-types#time)): The interval to check the sensor. Defaults to `50ms`.
 
 - **id** (*Optional*, [ID](https://esphome.io/guides/configuration-types#id)): Manually specify the ID used for code generation.
 

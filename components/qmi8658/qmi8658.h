@@ -21,6 +21,8 @@ const uint8_t QMI8658_REGISTER_CTRL5 = 0x06;        // Low pass filter setting
 const uint8_t QMI8658_REGISTER_CTRL6 = 0x07;        // AttitudeEngine™ Settings: Output Data Rate, Motion on Demand
 const uint8_t QMI8658_REGISTER_CTRL7 = 0x08;        // Enable Sensors
 const uint8_t QMI8658_REGISTER_CTRL8 = 0x09;        // Motion Detection Control
+const uint8_t QMI8658_REGISTER_FIFO_WTM_TH = 0x13;  // FIFO Watermark
+const uint8_t QMI8658_REGISTER_FIFO_CTRL = 0x14;    // FIFO Control
 const uint8_t QMI8658_REGISTER_CTRL9 = 0x0A;        // Host Commands
 const uint8_t QMI8658_REGISTER_CAL1_L = 0x0B;       // Calibration Register: lower 8 bits
 const uint8_t QMI8658_REGISTER_CAL1_H = 0x0C;       // Calibration Register: upper 8 bits
@@ -47,6 +49,7 @@ const uint8_t QMI8658_REGISTER_GZ_H = 0x40;         // X-axis Angular Rate: uppe
 #pragma endregion
 
 #pragma region Commands
+const uint8_t QMI8658_CMD_RST_FIFO = 0x04;
 const uint8_t QMI8658_CMD_WRITE_WOM_SETTING = 0x08;
 #pragma endregion
 
@@ -129,9 +132,26 @@ enum QMI8658GyroODR {
   QMI8658_GYRO_ODR_31_25HZ = 0x08
 };
 
+enum QMI8658FifoMode {
+  QMI8658_FIFO_MODE_BYPASS = 0x00,
+  QMI8658_FIFO_MODE_FIFO = 0x01,
+  QMI8658_FIFO_MODE_STREAM = 0x02,
+  QMI8658_FIFO_MODE_MAX = 0x03
+};
+
+enum QMI8658FifoSize {
+  QMI8658_FIFO_SIZE_16 = 0x00,
+  QMI8658_FIFO_SIZE_32 = 0x01,
+  QMI8658_FIFO_SIZE_64 = 0x02,
+  QMI8658_FIFO_SIZE_128 = 0x03
+};
+
+class QMI8658Component;
+
 struct QMI8658SensorStore {
   volatile bool data_ready{true};
   ISRInternalGPIOPin pin;
+  QMI8658Component *component_{nullptr};
 
   static void gpio_intr(QMI8658SensorStore *arg);
 };
@@ -146,6 +166,9 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   FIELD_WITH_SETTER(QMI8658LPFMode, gyro_lpf_mode, QMI8658_LPF_OFF)
   FIELD_WITH_SETTER(QMI8658GyroODR, gyro_odr, QMI8658_GYRO_ODR_8000HZ)
   FIELD_WITH_SETTER(QMI8658GyroRange, gyro_range, QMI8658_GYRO_RANGE_16DPS)
+  FIELD_WITH_SETTER(QMI8658FifoMode, fifo_mode, QMI8658_FIFO_MODE_BYPASS)
+  FIELD_WITH_SETTER(QMI8658FifoSize, fifo_size, QMI8658_FIFO_SIZE_16)
+  FIELD_WITH_SETTER(uint8_t, fifo_watermark, 8)
   SUB_SENSOR(accel_x)
   SUB_SENSOR(accel_y)
   SUB_SENSOR(accel_z)
@@ -165,14 +188,24 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
                              uint8_t initial_pin_state, uint8_t blanking_time);
 
  protected:
+  volatile float temp_{0};
+  volatile float accel_x_{0};
+  volatile float accel_y_{0};
+  volatile float accel_z_{0};
+  volatile float gyro_x_{0};
+  volatile float gyro_y_{0};
+  volatile float gyro_z_{0};
+
   bool clr_register_bit_(uint8_t reg, uint8_t bit);
-  bool configure_accel_(QMI8658AccelRange accel_range, QMI8658AccelODR accel_odr, QMI8658LPFMode accel_lpf_mode);
-  bool configure_gyro_(QMI8658GyroRange gyro_range, QMI8658GyroODR gyro_odr, QMI8658LPFMode gyro_lpf_mode);
+  bool configure_accel_(QMI8658AccelODR accel_odr);
+  bool configure_gyro_();
+  bool configure_fifo_();
   bool disable_sensors_();
   void enable_data_ready_interrupt_();
   void enable_interrupt_(QMI8658InterruptPin interrupt_pin);
   bool enable_required_sensors_();
   bool enable_sensors_(uint8_t sensors_state);
+  HighFrequencyLoopRequester high_freq_;
   bool is_accel_required_() {
     return this->accel_x_sensor_ != nullptr || this->accel_y_sensor_ != nullptr || this->accel_z_sensor_ != nullptr;
   }
@@ -183,6 +216,7 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   bool send_command_(uint8_t command, uint32_t wait_ms = 1000);
   bool set_register_bit_(uint8_t reg, uint8_t);
   QMI8658SensorStore store_{};
+  bool update_sensors_();
 };
 
 }  // namespace qmi8658
