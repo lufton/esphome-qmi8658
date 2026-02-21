@@ -21,8 +21,11 @@ const uint8_t QMI8658_REGISTER_CTRL5 = 0x06;        // Low pass filter setting
 const uint8_t QMI8658_REGISTER_CTRL6 = 0x07;        // AttitudeEngine™ Settings: Output Data Rate, Motion on Demand
 const uint8_t QMI8658_REGISTER_CTRL7 = 0x08;        // Enable Sensors
 const uint8_t QMI8658_REGISTER_CTRL8 = 0x09;        // Motion Detection Control
-const uint8_t QMI8658_REGISTER_FIFO_WTM_TH = 0x13;  // FIFO Watermark
-const uint8_t QMI8658_REGISTER_FIFO_CTRL = 0x14;    // FIFO Control
+const uint8_t QMI8658_REGISTER_FIFO_WTM_TH = 0x13;  // FIFO watermark level, in ODRs
+const uint8_t QMI8658_REGISTER_FIFO_CTRL = 0x14;    // FIFO Setup
+const uint8_t QMI8658_REGISTER_FIFO_SMPL_CNT = 0x15;// FIFO sample count LSBs
+const uint8_t QMI8658_REGISTER_FIFO_STATUS = 0x16;  // FIFO Status
+const uint8_t QMI8658_REGISTER_FIFO_DATA = 0x17;    // FIFO Data
 const uint8_t QMI8658_REGISTER_CTRL9 = 0x0A;        // Host Commands
 const uint8_t QMI8658_REGISTER_CAL1_L = 0x0B;       // Calibration Register: lower 8 bits
 const uint8_t QMI8658_REGISTER_CAL1_H = 0x0C;       // Calibration Register: upper 8 bits
@@ -50,6 +53,7 @@ const uint8_t QMI8658_REGISTER_GZ_H = 0x40;         // X-axis Angular Rate: uppe
 
 #pragma region Commands
 const uint8_t QMI8658_CMD_RST_FIFO = 0x04;
+const uint8_t QMI8658_CMD_REQ_FIFO = 0x05;
 const uint8_t QMI8658_CMD_WRITE_WOM_SETTING = 0x08;
 #pragma endregion
 
@@ -205,7 +209,7 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   void enable_interrupt_(QMI8658InterruptPin interrupt_pin);
   bool enable_required_sensors_();
   bool enable_sensors_(uint8_t sensors_state);
-  HighFrequencyLoopRequester high_freq_;
+  // HighFrequencyLoopRequester high_freq_;
   bool is_accel_required_() {
     return this->accel_x_sensor_ != nullptr || this->accel_y_sensor_ != nullptr || this->accel_z_sensor_ != nullptr;
   }
@@ -216,7 +220,10 @@ class QMI8658Component : public PollingComponent, public i2c::I2CDevice {
   bool send_command_(uint8_t command, uint32_t wait_ms = 1000);
   bool set_register_bit_(uint8_t reg, uint8_t);
   QMI8658SensorStore store_{};
+  void update_accel_sensor_(int16_t data_x, int16_t data_y, int16_t data_z);
+  void update_gyro_sensor_(int16_t data_x, int16_t data_y, int16_t data_z);
   bool update_sensors_();
+  void update_temp_sensor_(int16_t data);
 };
 
 }  // namespace qmi8658

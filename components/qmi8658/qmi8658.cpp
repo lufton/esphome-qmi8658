@@ -48,10 +48,10 @@ void QMI8658Component::setup() {
 
   ESP_LOGV(TAG, "  Setting up LPF config...");
   uint8_t lpf_config = 0;
-  if (this->accel_lpf_mode_ != QMI8658LPFMode::QMI8658_LPF_OFF) {
+  if (this->accel_lpf_mode_ != QMI8658_LPF_OFF) {
     lpf_config |= (uint8_t) this->accel_lpf_mode_ << 1 | 1 << 0;
   }
-  if (this->gyro_lpf_mode_ != QMI8658LPFMode::QMI8658_LPF_OFF) {
+  if (this->gyro_lpf_mode_ != QMI8658_LPF_OFF) {
     lpf_config |= (uint8_t) this->gyro_lpf_mode_ << 5 | 1 << 4;
   }
   ESP_LOGV(TAG, "  lpf_config: 0b" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(lpf_config));
@@ -68,7 +68,7 @@ void QMI8658Component::setup() {
 
   if (this->interrupt_pin_1_ != nullptr) {
     ESP_LOGCONFIG(TAG, "Setting up interrupt pin...");
-    this->high_freq_.start();
+    // this->high_freq_.start();
     this->interrupt_pin_1_->setup();
     this->store_.pin = this->interrupt_pin_1_->to_isr();
     this->store_.component_ = this;
@@ -78,7 +78,7 @@ void QMI8658Component::setup() {
   }
   if (this->interrupt_pin_2_ != nullptr) {
     ESP_LOGCONFIG(TAG, "Setting up interrupt pin...");
-    this->high_freq_.start();
+    // this->high_freq_.start();
     this->interrupt_pin_2_->setup();
     this->store_.pin = this->interrupt_pin_2_->to_isr();
     this->store_.component_ = this;
@@ -128,49 +128,124 @@ void QMI8658Component::update() {
   this->status_clear_warning();
 }
 
+void QMI8658Component::update_accel_sensor_(int16_t data_x, int16_t data_y, int16_t data_z) {
+  this->accel_x_ = (float) data_x / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
+  this->accel_y_ = (float) data_y / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
+  this->accel_z_ = (float) data_z / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
+  if (this->accel_x_sensor_ != nullptr) this->accel_x_sensor_->publish_state(this->accel_x_);
+  if (this->accel_y_sensor_ != nullptr) this->accel_y_sensor_->publish_state(this->accel_y_);
+  if (this->accel_z_sensor_ != nullptr) this->accel_z_sensor_->publish_state(this->accel_z_);
+  ESP_LOGVV(TAG, "Got accel={x=%.3f m/s², y=%.3f m/s², z=%.3f m/s²}", this->accel_x_, this->accel_y_, this->accel_z_);
+}
+
+void QMI8658Component::update_gyro_sensor_(int16_t data_x, int16_t data_y, int16_t data_z) {
+  this->gyro_x_ = (float) data_x / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
+  this->gyro_y_ = (float) data_y / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
+  this->gyro_z_ = (float) data_z / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
+  if (this->gyro_x_sensor_ != nullptr) this->gyro_x_sensor_->publish_state(this->gyro_x_);
+  if (this->gyro_y_sensor_ != nullptr) this->gyro_y_sensor_->publish_state(this->gyro_y_);
+  if (this->gyro_z_sensor_ != nullptr) this->gyro_z_sensor_->publish_state(this->gyro_z_);
+  ESP_LOGVV(TAG, "Got gyro={x=%.3f °/s, y=%.3f °/s, z=%.3f °/s}", this->gyro_x_, this->gyro_y_, this->gyro_z_);
+}
+
 bool QMI8658Component::update_sensors_() {
   ESP_LOGV(TAG, "    Updating QMI8658...");
   int16_t data[3];
 
-  if (this->read_le_int16_(QMI8658_REGISTER_TEMP_L, data, 1) != i2c::ERROR_OK) {
-    this->status_set_warning("Error reading temperature data register");
-    return false;
+  if (this->temperature_sensor_ != nullptr) {
+    if (this->read_le_int16_(QMI8658_REGISTER_TEMP_L, data, 1) != i2c::ERROR_OK) {
+      this->status_set_warning("Error reading temperature data register");
+      return false;
+    }
+    this->update_temp_sensor_(data[0]);
   }
 
-  this->temp_ = (float) data[0] / 32768.f * 64.5f + 23.f;
+  if (this->fifo_mode_ == QMI8658_FIFO_MODE_BYPASS) {
+    if (this->is_accel_required_()) {
+      if (this->read_le_int16_(QMI8658_REGISTER_AX_L, data, 3) != i2c::ERROR_OK) {
+        this->status_set_warning("Error reading acceleration data register");
+        return false;
+      }
+      this->update_accel_sensor_(data[0], data[1], data[2]);
+    }
 
-  if (this->read_le_int16_(QMI8658_REGISTER_AX_L, data, 3) != i2c::ERROR_OK) {
-    this->status_set_warning("Error reading acceleration data register");
-    return false;
+    if (this->is_gyro_required_()) {
+      if (this->read_le_int16_(QMI8658_REGISTER_GX_L, data, 3) != i2c::ERROR_OK) {
+        this->status_set_warning("Error reading gyroscope data register");
+        return false;
+      }
+      this->update_gyro_sensor_(data[0], data[1], data[2]);
+    }
+  } else {
+    uint8_t val;
+    
+    if (this->read_register(QMI8658_REGISTER_FIFO_STATUS, &val, 1) != i2c::ERROR_OK) {
+      this->status_set_warning("Error reading FIFO status register");
+      return false;
+    }
+    ESP_LOGV(TAG, "  fifo status: 0b" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(val));
+    if (val & (1 << 5)) ESP_LOGV(TAG, "FIFO overflowed (data dropped)");
+    if (val & (1 << 6)) ESP_LOGV(TAG, "FIFO hit watermark level");
+    if (val & (1 << 7)) ESP_LOGV(TAG, "FIFO is full");
+
+    if (this->read_le_int16_(QMI8658_REGISTER_FIFO_SMPL_CNT, data, 1) != i2c::ERROR_OK) {
+      this->status_set_warning("Error reading FIFO sample count register");
+      return false;
+    }
+    const uint8_t sensor_count = this->is_accel_required_() + this->is_gyro_required_();
+    const uint16_t frame_count = ((uint16_t) data[0]) & 0x03FF;
+    const uint8_t sample_count = frame_count / (sensor_count * 3);
+    const uint8_t values_per_sample = 3 * sensor_count;
+    ESP_LOGV(TAG, "sensor_count: %d, frame_count: %d, sample_count: %d", sensor_count, frame_count, sample_count);
+
+    ESP_LOGV(TAG, "  Requesting FIFO...");
+    if (!this->send_command_(QMI8658_CMD_REQ_FIFO)) {
+      this->status_set_warning("Error requesting FIFO");
+      return false;
+    }
+    
+//    uint32_t start = millis();
+    int16_t words[frame_count];
+    if (this->read_le_int16_(QMI8658_REGISTER_FIFO_DATA, words, frame_count) != i2c::ERROR_OK) {
+      this->status_set_warning("Error reading FIFO data register");
+      return false;
+    }
+//    ESP_LOGE(TAG, "read took %d ms", millis() - start);
+
+//    for (uint8_t i = 0; i < sample_count; i++) {
+//      ESP_LOGE(TAG, "sample %d: %d %d %d", i, words[i * 6], words[i * 6 + 1], words[i * 6 + 2]);
+//      ESP_LOGE(TAG, "sample %d: %d %d %d", i, words[i * 6 + 3], words[i * 6 + 4], words[i * 6 + 5]);
+//    }
+
+    for (uint8_t i = 0; i < sample_count; i++) {
+      uint16_t base = i * values_per_sample;
+      uint8_t offset = 0;
+
+      if (this->is_accel_required_()) {
+        ESP_LOGE(TAG, "%d,%.2f", millis(), (float) words[base + offset + 1] / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH);
+        this->update_accel_sensor_(words[base + offset], words[base + offset + 1], words[base + offset + 2]);
+        offset += 3;
+      }
+
+      if (this->is_gyro_required_()) {
+        this->update_gyro_sensor_(words[base + offset], words[base + offset + 1], words[base + offset + 2]);
+      }
+    }
+
+    ESP_LOGV(TAG, "  Clearing FIFO read mode bit...");
+    if (!this->clr_register_bit_(QMI8658_REGISTER_FIFO_CTRL, 7)) {
+      this->status_set_warning("Error clearing FIFO read mode bit");
+      return false;
+    }
   }
-
-  this->accel_x_ = (float) data[0] / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
-  this->accel_y_ = (float) data[1] / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
-  this->accel_z_ = (float) data[2] / (float) 32768.f * (1 << ((uint8_t) this->accel_range_ + 1)) * GRAVITY_EARTH;
-
-  if (this->read_le_int16_(QMI8658_REGISTER_GX_L, data, 3) != i2c::ERROR_OK) {
-    this->status_set_warning("Error reading gyroscope data register");
-    return false;
-  }
-
-  this->gyro_x_ = (float) data[0] / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
-  this->gyro_y_ = (float) data[1] / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
-  this->gyro_z_ = (float) data[2] / (float) 32768.f * (1 << ((uint8_t) this->gyro_range_ + 4));
-
-  ESP_LOGV(TAG,
-           "Got accel={x=%.3f m/s², y=%.3f m/s², z=%.3f m/s²}, "
-           "gyro={x=%.3f °/s, y=%.3f °/s, z=%.3f °/s}, temp=%.3f°C",
-           accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, temperature);
-
-  if (this->temperature_sensor_ != nullptr) this->temperature_sensor_->publish_state(this->temp_);
-  if (this->accel_x_sensor_ != nullptr) this->accel_x_sensor_->publish_state(this->accel_x_);
-  if (this->accel_y_sensor_ != nullptr) this->accel_y_sensor_->publish_state(this->accel_y_);
-  if (this->accel_z_sensor_ != nullptr) this->accel_z_sensor_->publish_state(this->accel_z_);
-  if (this->gyro_x_sensor_ != nullptr) this->gyro_x_sensor_->publish_state(this->gyro_x_);
-  if (this->gyro_y_sensor_ != nullptr) this->gyro_y_sensor_->publish_state(this->gyro_y_);
-  if (this->gyro_z_sensor_ != nullptr) this->gyro_z_sensor_->publish_state(this->gyro_z_);
 
   return true;
+}
+
+void QMI8658Component::update_temp_sensor_(int16_t data) {
+  this->temp_ = (float) data / 32768.f * 64.5f + 23.f;
+  if (this->temperature_sensor_ != nullptr) this->temperature_sensor_->publish_state(this->temp_);
+  ESP_LOGVV(TAG, "Got temp=%.3f°C", this->temp_);
 }
 
 bool QMI8658Component::clr_register_bit_(uint8_t reg, uint8_t bit) {
